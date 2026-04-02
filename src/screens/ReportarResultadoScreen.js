@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,12 +19,56 @@ const ReportarResultadoScreen = ({ route, navigation }) => {
   const [selectedMarcador, setSelectedMarcador] = useState(null);
   const [esEmpate, setEsEmpate] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [reporteOponente, setReporteOponente] = useState(null);
+  const [estadoMatch, setEstadoMatch] = useState('pendiente'); // pendiente, esperando, conflicto
 
   const marcadoresVictoria = ['2-0', '2-1'];
   const marcadoresEmpate = ['1-1 (Empate)'];
 
   const jugadorANombre = partida.jugador1_nombre;
   const jugadorBNombre = partida.jugador2_nombre;
+  const esJugador1 = partida.jugador1_id === user.player_id;
+  const esJugador2 = partida.jugador2_id === user.player_id;
+
+  useEffect(() => {
+    verificarEstadoMatch();
+  }, []);
+
+  const verificarEstadoMatch = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('matches')
+        .select('ganador_reportado_1, ganador_reportado_2, empate, confirmado')
+        .eq('id', partida.id)
+        .single();
+
+      if (error) throw error;
+
+      // Verificar si ya hay reporte del oponente
+      const reporteOponenteValor = esJugador1 
+        ? data.ganador_reportado_2 
+        : data.ganador_reportado_1;
+
+      if (reporteOponenteValor) {
+        // Obtener el nombre del ganador reportado
+        const esGanadorOponente = reporteOponenteValor === (esJugador1 ? partida.jugador2_id : partida.jugador1_id);
+        const ganadorNombre = esGanadorOponente 
+          ? (esJugador1 ? jugadorBNombre : jugadorANombre) 
+          : (esJugador1 ? jugadorANombre : jugadorBNombre);
+        
+        setReporteOponente({
+          ganadorId: reporteOponenteValor,
+          ganadorNombre: ganadorNombre,
+          marcador: data.empate ? '1-1 (Empate)' : null
+        });
+        setEstadoMatch('esperando');
+      } else if (data.confirmado) {
+        setEstadoMatch('confirmado');
+      }
+    } catch (error) {
+      console.log('Error al verificar estado:', error);
+    }
+  };
 
   const handleGanadorSelect = (ganador) => {
     setSelectedGanador(ganador);
@@ -36,6 +80,70 @@ const ReportarResultadoScreen = ({ route, navigation }) => {
     setEsEmpate(true);
     setSelectedGanador(null);
     setSelectedMarcador('1-1 (Empate)');
+  };
+
+  const actualizarConfirmacion = async (matchId) => {
+    const { data } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('id', matchId)
+      .single();
+
+    if (
+      data.ganador_reportado_1 &&
+      data.ganador_reportado_2 &&
+      data.ganador_reportado_1 === data.ganador_reportado_2
+    ) {
+      await supabase
+        .from('matches')
+        .update({
+          ganador_final: data.ganador_reportado_1,
+          confirmado: true
+        })
+        .eq('id', matchId);
+    }
+  };
+
+  const handleAceptarResultado = async () => {
+    setIsLoading(true);
+
+    try {
+      const campo = esJugador1 ? 'ganador_reportado_1' : 'ganador_reportado_2';
+      
+      // Reportar el mismo ganador que el oponente
+      const { error } = await supabase
+        .from('matches')
+        .update({
+          [campo]: reporteOponente.ganadorId,
+          empate: reporteOponente.marcador === '1-1 (Empate)'
+        })
+        .eq('id', partida.id);
+
+      if (error) throw error;
+
+      // Verificar si ambos reportaron el mismo ganador
+      await actualizarConfirmacion(partida.id);
+
+      Alert.alert('Éxito', 'Resultado aceptado', [
+        { text: 'OK', onPress: () => navigation.goBack() }
+      ]);
+    } catch (error) {
+      console.log('Error al aceptar resultado:', error);
+      Alert.alert('Error', 'No se pudo aceptar el resultado');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleReportarConflicto = () => {
+    Alert.alert(
+      'Reportar conflicto',
+      'Si no estás de acuerdo con el resultado reportado, puedes reportar tu versión. El administrador revisará el caso.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Reportar mi versión', onPress: () => setEstadoMatch('pendiente') }
+      ]
+    );
   };
 
   const handleReportar = async () => {
@@ -52,66 +160,43 @@ const ReportarResultadoScreen = ({ route, navigation }) => {
     setIsLoading(true);
 
     try {
-      const jugadorId = user.player_id;
-      const esJugador1 = partida.jugador1_id === jugadorId;
-      const esJugador2 = partida.jugador2_id === jugadorId;
+      if (esEmpate) {
+        const { error } = await supabase
+          .from('matches')
+          .update({
+            empate: true,
+            ganador_final: null,
+            confirmado: false,
+            ganador_reportado_1: null,
+            ganador_reportado_2: null
+          })
+          .eq('id', partida.id);
 
-      if (!esJugador1 && !esJugador2) {
-        Alert.alert('Error', 'No puedes reportar esta partida');
+        if (error) throw error;
+
+        Alert.alert('Éxito', 'Empate reportado, esperando confirmación', [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
         return;
       }
 
-      let ganadorReportado = null;
-      let empate = false;
-
-      if (esEmpate) {
-        empate = true;
-      } else {
-        if (selectedGanador === 'A') {
-          ganadorReportado = partida.jugador1_id;
-        } else {
-          ganadorReportado = partida.jugador2_id;
-        }
-      }
-
+      const ganadorNormalizado = selectedGanador === 'A' 
+        ? partida.jugador1_id 
+        : partida.jugador2_id;
+      
       const campo = esJugador1 ? 'ganador_reportado_1' : 'ganador_reportado_2';
-      const updateData = {
-        [campo]: ganadorReportado,
-        empate: empate,
-      };
-
-      // Si es empate, limpiamos los ganadores
-      if (empate) {
-        updateData.ganador_reportado_1 = null;
-        updateData.ganador_reportado_2 = null;
-      }
 
       const { error } = await supabase
         .from('matches')
-        .update(updateData)
+        .update({
+          [campo]: ganadorNormalizado,
+          empate: false
+        })
         .eq('id', partida.id);
 
       if (error) throw error;
 
-      // Verificar si ambos jugadores reportaron el mismo ganador
-      const { data: matchActualizado } = await supabase
-        .from('matches')
-        .select('*')
-        .eq('id', partida.id)
-        .single();
-
-      if (matchActualizado.ganador_reportado_1 && 
-          matchActualizado.ganador_reportado_2 && 
-          matchActualizado.ganador_reportado_1 === matchActualizado.ganador_reportado_2) {
-        
-        await supabase
-          .from('matches')
-          .update({
-            ganador_final: matchActualizado.ganador_reportado_1,
-            confirmado: true
-          })
-          .eq('id', partida.id);
-      }
+      await actualizarConfirmacion(partida.id);
 
       Alert.alert('Éxito', 'Resultado reportado correctamente', [
         { text: 'OK', onPress: () => navigation.goBack() }
@@ -124,6 +209,46 @@ const ReportarResultadoScreen = ({ route, navigation }) => {
     }
   };
 
+  // Pantalla cuando el oponente ya reportó
+  if (estadoMatch === 'esperando') {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={styles.content}>
+          <Text style={styles.title}>Resultado reportado</Text>
+          
+          <View style={styles.infoCard}>
+            <Text style={styles.infoText}>
+              Tu oponente reportó que {reporteOponente?.ganadorNombre} ganó la partida.
+            </Text>
+            {reporteOponente?.marcador && (
+              <Text style={styles.marcadorInfo}>Marcador: {reporteOponente.marcador}</Text>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={styles.aceptarButton}
+            onPress={handleAceptarResultado}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color={colors.white} />
+            ) : (
+              <Text style={styles.aceptarButtonText}>Aceptar resultado</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.conflictoButton}
+            onPress={handleReportarConflicto}
+          >
+            <Text style={styles.conflictoButtonText}>No estoy de acuerdo</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Pantalla normal para reportar (igual que antes)
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.content}>
@@ -266,6 +391,50 @@ const styles = StyleSheet.create({
     color: colors.darkGray,
     textAlign: 'center',
     marginBottom: 30,
+  },
+  infoCard: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 30,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  infoText: {
+    fontSize: 16,
+    color: colors.primary,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  marcadorInfo: {
+    fontSize: 14,
+    color: colors.darkGray,
+    textAlign: 'center',
+  },
+  aceptarButton: {
+    backgroundColor: colors.success,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  aceptarButtonText: {
+    color: colors.white,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  conflictoButton: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  conflictoButtonText: {
+    color: colors.warning,
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
   jugadoresContainer: {
     flexDirection: 'row',

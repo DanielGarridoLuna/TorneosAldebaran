@@ -10,22 +10,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../utils/colors';
 import { useAuth } from '../context/AuthContext';
-import { estadisticasJugador } from '../data/mockData';
 import EditarPerfilModal from '../components/EditarPerfilModal';
 
 const PerfilScreen = () => {
   const { user, logout, updateUser } = useAuth();
   const [modalVisible, setModalVisible] = useState(false);
-
-  const estadisticas = estadisticasJugador[user?.player_id] || {
-    torneosParticipados: 0,
-    torneosGanados: 0,
-    partidasJugadas: 0,
-    partidasGanadas: 0,
-    partidasPerdidas: 0,
-    tasaVictorias: 0,
-    mejorPosicion: 0,
-  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -66,6 +55,7 @@ const PerfilScreen = () => {
           </TouchableOpacity>
         </View>
 
+        {/* Datos del jugador */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Datos del jugador</Text>
 
@@ -90,44 +80,7 @@ const PerfilScreen = () => {
           </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Estadísticas de carrera</Text>
-
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{estadisticas.torneosParticipados}</Text>
-              <Text style={styles.statLabel}>Torneos</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{estadisticas.torneosGanados}</Text>
-              <Text style={styles.statLabel}>Torneos ganados</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{estadisticas.tasaVictorias}%</Text>
-              <Text style={styles.statLabel}>Win rate</Text>
-            </View>
-          </View>
-
-          <View style={styles.statsRow}>
-            <View style={styles.statsRowItem}>
-              <Text style={styles.statsRowNumber}>{estadisticas.partidasJugadas}</Text>
-              <Text style={styles.statsRowLabel}>Partidas</Text>
-            </View>
-            <View style={styles.statsRowItem}>
-              <Text style={styles.statsRowNumber}>{estadisticas.partidasGanadas}</Text>
-              <Text style={styles.statsRowLabel}>Ganadas</Text>
-            </View>
-            <View style={styles.statsRowItem}>
-              <Text style={styles.statsRowNumber}>{estadisticas.partidasPerdidas}</Text>
-              <Text style={styles.statsRowLabel}>Perdidas</Text>
-            </View>
-            <View style={styles.statsRowItem}>
-              <Text style={styles.statsRowNumber}>#{estadisticas.mejorPosicion}</Text>
-              <Text style={styles.statsRowLabel}>Mejor puesto</Text>
-            </View>
-          </View>
-        </View>
-
+        {/* Configuración */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Configuración</Text>
 
@@ -135,9 +88,7 @@ const PerfilScreen = () => {
             <Text style={styles.menuItemText}>Notificaciones</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.menuItem}>
-            <Text style={styles.menuItemText}>Idioma</Text>
-          </TouchableOpacity>
+   
           
           <TouchableOpacity style={styles.menuItem}>
             <Text style={styles.menuItemText}>Términos y condiciones</Text>
@@ -232,51 +183,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: colors.primary,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  statCard: {
-    alignItems: 'center',
-    backgroundColor: colors.gray,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    minWidth: 100,
-  },
-  statNumber: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: colors.primary,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: colors.darkGray,
-    marginTop: 4,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.gray,
-  },
-  statsRowItem: {
-    alignItems: 'center',
-  },
-  statsRowNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.secondary,
-  },
-  statsRowLabel: {
-    fontSize: 12,
-    color: colors.darkGray,
-    marginTop: 4,
   },
   menuItem: {
     paddingVertical: 14,

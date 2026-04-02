@@ -12,7 +12,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../utils/colors';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { obtenerEventoActual } from '../utils/evento';
+
+// Función auxiliar para normalizar IDs (igual que en la webapp)
+const normalizarId = (valor) => {
+  if (valor === null || valor === undefined) return null;
+  const limpio = String(valor).trim();
+  if (!limpio) return null;
+  if (limpio.toLowerCase() === "null") return null;
+  if (limpio.toLowerCase() === "undefined") return null;
+  return limpio;
+};
+
+const esUuid = (valor) => {
+  const limpio = normalizarId(valor);
+  if (!limpio) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(limpio);
+};
 
 const MisPartidasScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -25,15 +40,33 @@ const MisPartidasScreen = ({ navigation }) => {
   }, []);
 
   const cargarPartidas = async () => {
-    if (!user?.player_id) return;
-    
+    if (!user?.player_id) {
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
-      // Obtener torneos donde el usuario está inscrito
+      // 1. Obtener torneos activos donde el usuario está inscrito
+      const { data: torneosActivos } = await supabase
+        .from('torneos')
+        .select('id')
+        .eq('activo', true);
+
+      const torneosIds = torneosActivos?.map(t => t.id) || [];
+
+      if (torneosIds.length === 0) {
+        setPartidas([]);
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Obtener inscripciones del usuario en torneos activos
       const { data: inscripciones, error: inscError } = await supabase
         .from('inscripciones')
         .select('torneo_id, evento_id')
-        .eq('jugador_id', user.id);
+        .eq('jugador_id', user.id)
+        .in('torneo_id', torneosIds);
 
       if (inscError) throw inscError;
 
@@ -43,10 +76,15 @@ const MisPartidasScreen = ({ navigation }) => {
         return;
       }
 
-      const torneosIds = [...new Set(inscripciones.map(i => i.torneo_id))];
-      const eventosIds = [...new Set(inscripciones.map(i => i.evento_id))];
+      const eventosIds = [...new Set(inscripciones.map(i => i.evento_id).filter(Boolean))];
 
-      // Obtener eventos activos
+      if (eventosIds.length === 0) {
+        setPartidas([]);
+        setIsLoading(false);
+        return;
+      }
+
+      // 3. Obtener eventos no archivados
       const { data: eventos, error: eventosError } = await supabase
         .from('eventos')
         .select('*')
@@ -55,77 +93,112 @@ const MisPartidasScreen = ({ navigation }) => {
 
       if (eventosError) throw eventosError;
 
-      // Obtener rondas activas para cada evento
+      if (!eventos || eventos.length === 0) {
+        setPartidas([]);
+        setIsLoading(false);
+        return;
+      }
+
       const todasPartidas = [];
 
+      // 4. Para cada evento, buscar rondas activas (igual que en Pareos.js)
       for (const evento of eventos) {
-        // Obtener la ronda actual del evento
+        if (!esUuid(evento.id)) continue;
+
+        // Cargar rondas del evento (como en cargarRondas de Pareos.js)
         const { data: rondas, error: rondasError } = await supabase
           .from('rondas')
           .select('*')
           .eq('evento_id', evento.id)
-          .eq('status', 'activa')
-          .order('numero_ronda', { ascending: false })
-          .limit(1);
+          .order('numero_ronda', { ascending: false });
 
-        if (rondasError) throw rondasError;
-
-        if (rondas && rondas.length > 0) {
-          const rondaActual = rondas[0];
-          
-          // Obtener partidas del usuario en esta ronda
-          const { data: matches, error: matchesError } = await supabase
-            .from('matches')
-            .select('*')
-            .eq('ronda_id', rondaActual.id)
-            .eq('evento_id', evento.id)
-            .or(`jugador1_id.eq.${user.player_id},jugador2_id.eq.${user.player_id}`);
-
-          if (matchesError) throw matchesError;
-
-          // Obtener nombres de jugadores
-          const jugadoresIds = [...new Set(
-            matches.flatMap(m => [m.jugador1_id, m.jugador2_id]).filter(Boolean)
-          )];
-
-          let mapaNombres = {};
-          if (jugadoresIds.length > 0) {
-            const { data: jugadores } = await supabase
-              .from('jugadores')
-              .select('player_id, nombre')
-              .in('player_id', jugadoresIds);
-            
-            mapaNombres = (jugadores || []).reduce((acc, j) => {
-              acc[j.player_id] = j.nombre;
-              return acc;
-            }, {});
-          }
-
-          // Obtener nombre del torneo
-          const torneo = await supabase
-            .from('torneos')
-            .select('nombre')
-            .eq('id', evento.torneo_id)
-            .single();
-
-          const partidasFormateadas = matches.map(match => ({
-            ...match,
-            ronda_numero: rondaActual.numero_ronda,
-            torneoNombre: torneo.data?.nombre || 'Torneo',
-            jugador1_nombre: mapaNombres[match.jugador1_id] || match.jugador1_id,
-            jugador2_nombre: mapaNombres[match.jugador2_id] || match.jugador2_id,
-            tieneResultado: match.confirmado || match.ganador_final !== null,
-            puedeReportar: !match.confirmado && !match.ganador_final,
-          }));
-
-          todasPartidas.push(...partidasFormateadas);
+        if (rondasError) {
+          console.log('Error en rondas:', rondasError);
+          continue;
         }
+
+        if (!rondas || rondas.length === 0) continue;
+
+        // Encontrar la ronda activa (status "activa") - igual que en Pareos.js
+        const rondaActiva = rondas.find(r => r.status === 'activa');
+
+        if (!rondaActiva) continue;
+
+        // Cargar matches de la ronda activa (como en cargarMatches de Pareos.js)
+        const { data: matches, error: matchesError } = await supabase
+          .from('matches')
+          .select('*')
+          .eq('ronda_id', rondaActiva.id)
+          .eq('evento_id', evento.id)
+          .order('mesa', { ascending: true });
+
+        if (matchesError) {
+          console.log('Error en matches:', matchesError);
+          continue;
+        }
+
+        if (!matches || matches.length === 0) continue;
+
+        // Filtrar solo los matches del usuario actual
+        const misMatches = matches.filter(m =>
+          normalizarId(m.jugador1_id) === user.player_id ||
+          normalizarId(m.jugador2_id) === user.player_id
+        );
+
+        if (misMatches.length === 0) continue;
+
+        // Obtener nombres de los jugadores (igual que en Pareos.js)
+        const ids = [
+          ...new Set(
+            misMatches
+              .flatMap(m => [m.jugador1_id, m.jugador2_id])
+              .map(normalizarId)
+              .filter(Boolean)
+          )
+        ];
+
+        let mapaNombres = {};
+        if (ids.length > 0) {
+          const { data: jugadores } = await supabase
+            .from('jugadores')
+            .select('player_id, nombre')
+            .in('player_id', ids);
+
+          (jugadores || []).forEach(j => {
+            mapaNombres[j.player_id] = j.nombre;
+          });
+        }
+
+        // Obtener nombre del torneo
+        const { data: torneo } = await supabase
+          .from('torneos')
+          .select('nombre')
+          .eq('id', evento.torneo_id)
+          .single();
+
+        // Formatear partidas
+        const partidasFormateadas = misMatches.map(match => {
+          const tieneResultado = match.confirmado === true;
+          return {
+            ...match,
+            ronda_numero: rondaActiva.numero_ronda,
+            torneoNombre: torneo?.nombre || 'Torneo',
+            jugador1_nombre: mapaNombres[normalizarId(match.jugador1_id)] || match.jugador1_id || 'Desconocido',
+            jugador2_nombre: match.jugador2_id ? (mapaNombres[normalizarId(match.jugador2_id)] || match.jugador2_id) : 'BYE',
+            tieneResultado: tieneResultado,
+            puedeReportar: !tieneResultado,
+            empate: match.empate || false,
+            ganador_final: match.ganador_final,
+          };
+        });
+
+        todasPartidas.push(...partidasFormateadas);
       }
 
       setPartidas(todasPartidas);
     } catch (error) {
       console.log('Error al cargar partidas:', error);
-      Alert.alert('Error', 'No se pudieron cargar tus partidas');
+      Alert.alert('Error', 'No se pudieron cargar tus partidas: ' + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -142,10 +215,7 @@ const MisPartidasScreen = ({ navigation }) => {
 
   const partidasPendientes = partidas.filter(p => !p.tieneResultado);
   const partidasFinalizadas = partidas.filter(p => p.tieneResultado);
-
-  const partidasMostradas = selectedFilter === 'pendientes' 
-    ? partidasPendientes 
-    : partidasFinalizadas;
+  const partidasMostradas = selectedFilter === 'pendientes' ? partidasPendientes : partidasFinalizadas;
 
   const renderPartida = ({ item }) => (
     <View style={styles.card}>
