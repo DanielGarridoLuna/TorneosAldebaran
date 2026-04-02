@@ -1,64 +1,41 @@
-import { useEffect, useRef } from 'react';
-import * as Notifications from 'expo-notifications';
+// hooks/useNotifications.js
+import { useState, useEffect, useRef } from 'react';
+import { Platform, Alert } from 'react-native';
 import * as Device from 'expo-device';
-import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { supabase } from '../lib/supabase';
 
-// Configurar cómo se muestran las notificaciones cuando la app está en primer plano
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
-    shouldSetBadge: false,
+    shouldSetBadge: true,
   }),
 });
 
-export const useNotifications = (userId) => {
+export function useNotifications(playerId) {
+  const [expoPushToken, setExpoPushToken] = useState('');
   const notificationListener = useRef();
   const responseListener = useRef();
 
-  useEffect(() => {
-    if (!userId) return;
+  async function registerForPushNotificationsAsync() {
+    let token;
+    
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+    }
 
-    registerForPushNotificationsAsync(userId);
+    if (!Device.isDevice) {
+      Alert.alert('Error', 'Las notificaciones solo funcionan en dispositivos físicos');
+      return null;
+    }
 
-    // Escuchar cuando llega una notificación
-    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Notificación recibida:', notification);
-    });
-
-    // Escuchar cuando el usuario toca una notificación
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log('Notificación tocada:', response);
-      // Aquí puedes navegar a una pantalla específica
-    });
-
-    return () => {
-      if (notificationListener.current) {
-        Notifications.removeNotificationSubscription(notificationListener.current);
-      }
-      if (responseListener.current) {
-        Notifications.removeNotificationSubscription(responseListener.current);
-      }
-    };
-  }, [userId]);
-
-  return;
-};
-
-async function registerForPushNotificationsAsync(userId) {
-  let token;
-
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#FF231F7C',
-    });
-  }
-
-  if (Device.isDevice) {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
     
@@ -68,50 +45,72 @@ async function registerForPushNotificationsAsync(userId) {
     }
     
     if (finalStatus !== 'granted') {
-      console.log('No se obtuvieron permisos para notificaciones');
-      return;
+      Alert.alert('Error', 'No se pudieron obtener permisos para notificaciones');
+      return null;
     }
     
-    token = (await Notifications.getExpoPushTokenAsync()).data;
-    console.log('Expo Push Token:', token);
-    
-    // Guardar token en Supabase
-    if (token && userId) {
-      await savePushToken(userId, token);
+    try {
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      if (!projectId) throw new Error('Project ID not found');
+      
+      token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+      console.log('Expo Push Token:', token);
+    } catch (error) {
+      console.error('Error getting push token:', error);
     }
-  } else {
-    console.log('Debes usar un dispositivo físico para notificaciones push');
+
+    return token;
   }
 
-  return token;
-}
-
-async function savePushToken(userId, token) {
-  try {
-    // Verificar si ya existe el token
-    const { data: existing } = await supabase
-      .from('push_tokens')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('token', token)
-      .maybeSingle();
-
-    if (existing) {
-      console.log('Token ya existe');
-      return;
-    }
-
-    // Insertar nuevo token
+  async function savePushTokenToSupabase(token, pId) {
+    if (!token || !pId) return;
+    
     const { error } = await supabase
       .from('push_tokens')
-      .insert({
-        user_id: userId,
-        token: token,
-      });
-
-    if (error) throw error;
-    console.log('Token guardado correctamente');
-  } catch (error) {
-    console.log('Error al guardar token:', error);
+      .upsert({
+        player_id: pId,
+        expo_push_token: token,
+        device_os: Platform.OS,
+        updated_at: new Date(),
+      }, { onConflict: 'player_id' });
+    
+    if (error) console.error('Error saving push token:', error);
   }
+
+  useEffect(() => {
+    async function setupNotifications() {
+      if (!playerId) return;
+      
+      const token = await registerForPushNotificationsAsync();
+      if (token) {
+        await savePushTokenToSupabase(token, playerId);
+        setExpoPushToken(token);
+      }
+    }
+
+    setupNotifications();
+
+    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Notification received:', notification);
+    });
+
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      // Navegar según el tipo de notificación
+      if (data.type === 'new_match' || data.type === 'result_confirmed') {
+        // Navegar a la pantalla de partidas
+        // navigation.navigate('MisPartidas');
+      } else if (data.type === 'standings') {
+        // Navegar a standings
+        // navigation.navigate('Standings');
+      }
+    });
+
+    return () => {
+      if (notificationListener.current) notificationListener.current.remove();
+      if (responseListener.current) responseListener.current.remove();
+    };
+  }, [playerId]);
+
+  return { expoPushToken };
 }
