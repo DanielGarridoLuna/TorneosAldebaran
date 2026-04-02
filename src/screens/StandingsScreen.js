@@ -147,7 +147,7 @@ const StandingsScreen = () => {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {torneos.length > 0 && (
         <View style={styles.selectorContainer}>
           <Text style={styles.selectorLabel}>Torneo:</Text>
@@ -199,7 +199,7 @@ const StandingsScreen = () => {
             data={standings}
             keyExtractor={(item, index) => `${item.player_id}-${index}`}
             renderItem={renderStandingItem}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[styles.listContent, { paddingBottom: 20 }]}
             showsVerticalScrollIndicator={false}
           />
           

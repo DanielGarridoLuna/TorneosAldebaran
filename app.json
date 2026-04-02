@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "AldebaranTorneos",
+    "name": "Aldebaran Torneos",
     "slug": "AldebaranTorneos",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -20,7 +20,8 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "package": "com.shadowdraymon.AldebaranTorneos"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -29,6 +30,11 @@
       "expo-font",
       "@react-native-google-signin/google-signin",
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "68c39ad1-cb85-431b-899e-81161dffbc83"
+      }
+    }
   }
 }

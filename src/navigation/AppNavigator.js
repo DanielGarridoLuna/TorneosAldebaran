@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../utils/colors';
 import { useAuth } from '../context/AuthContext';
 
@@ -97,6 +98,8 @@ const PerfilStack = () => {
 
 // Tabs principales
 const MainTabs = () => {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -115,14 +118,14 @@ const MainTabs = () => {
         },
         tabBarActiveTintColor: colors.secondary,
         tabBarInactiveTintColor: colors.darkGray,
-        tabBarStyle: {
-          backgroundColor: colors.white,
-          borderTopWidth: 1,
-          borderTopColor: colors.gray,
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 8,
-        },
+     tabBarStyle: {
+  backgroundColor: colors.white,
+  borderTopWidth: 1,
+  borderTopColor: colors.gray,
+  height: 60,
+  paddingBottom: 8,
+  paddingTop: 8,
+},
         headerShown: false,
       })}
     >
@@ -137,6 +140,7 @@ const MainTabs = () => {
 // Navegador principal
 const AppNavigator = () => {
   const { user, isLoading } = useAuth();
+  const insets = useSafeAreaInsets();
 
   if (isLoading) {
     return (

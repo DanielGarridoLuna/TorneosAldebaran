@@ -26,7 +26,6 @@ const DetalleTorneoScreen = ({ route, navigation }) => {
   const esTorneoFinalizado = torneo?.estado === 'finalizado';
   const rondaActual = torneo?.rondaActual || 0;
 
-  // Filtrar rondas según el estado del torneo
   const rondasMostradas = rondasDisponibles.filter((ronda) => {
     if (esTorneoFinalizado) {
       return true;
@@ -37,7 +36,6 @@ const DetalleTorneoScreen = ({ route, navigation }) => {
     return false;
   });
 
-  // Seleccionar automáticamente la ronda actual si está activo
   useEffect(() => {
     if (esTorneoActivo && rondaActual > 0) {
       setSelectedRonda(rondaActual);
@@ -85,8 +83,12 @@ const DetalleTorneoScreen = ({ route, navigation }) => {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 20 }}
+      >
         <View style={styles.header}>
           <Text style={styles.titulo}>{torneo.nombre}</Text>
           <Text style={styles.fecha}>📅 {torneo.fecha}</Text>
@@ -171,7 +173,6 @@ const DetalleTorneoScreen = ({ route, navigation }) => {
               )}
             </Text>
 
-            {/* Filtrar solo partidas del usuario actual */}
             {rondaActualData?.partidas
               .filter((partida) => 
                 partida.jugadorA.id === user.id || partida.jugadorB.id === user.id
@@ -216,7 +217,6 @@ const DetalleTorneoScreen = ({ route, navigation }) => {
             </Text>
           </View>
         )}
-        <View style={{ height: 20 }} />
       </ScrollView>
     </SafeAreaView>
   );

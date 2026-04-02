@@ -55,7 +55,6 @@ const TorneosScreen = ({ navigation }) => {
       if (data && user?.id) {
         const torneosConInscripcion = await Promise.all(
           data.map(async (torneo) => {
-            // Obtener evento actual usando la misma función que la webapp
             const eventoActual = await obtenerEventoActual(torneo.id);
             
             let inscrito = false;
@@ -125,7 +124,6 @@ const TorneosScreen = ({ navigation }) => {
     try {
       const today = new Date().toLocaleDateString('en-CA');
       
-      // Obtener evento actual nuevamente para confirmar
       const eventoActual = await obtenerEventoActual(selectedTorneo.id);
       
       if (!eventoActual?.id) {
@@ -135,7 +133,6 @@ const TorneosScreen = ({ navigation }) => {
         return;
       }
       
-      // Verificar si ya está inscrito
       const { data: existe } = await supabase
         .from('inscripciones')
         .select('id')
@@ -151,7 +148,6 @@ const TorneosScreen = ({ navigation }) => {
         return;
       }
       
-      // Obtener estado de registro abierto
       const { data: estado } = await supabase
         .from('torneo_estado')
         .select('registro_abierto')
@@ -159,7 +155,6 @@ const TorneosScreen = ({ navigation }) => {
       
       const late = !estado?.registro_abierto;
       
-      // Crear inscripción
       const { error } = await supabase
         .from('inscripciones')
         .insert({
@@ -176,7 +171,6 @@ const TorneosScreen = ({ navigation }) => {
       
       Alert.alert('¡Inscripción exitosa!', `Te has inscrito a ${selectedTorneo.nombre}`);
       
-      // Actualizar estado local
       setTorneos(prev => 
         prev.map(t => 
           t.id === selectedTorneo.id 
@@ -246,7 +240,7 @@ const TorneosScreen = ({ navigation }) => {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Torneos Activos</Text>
         <View style={[styles.estadoBadge, registroAbierto ? styles.estadoAbierto : styles.estadoCerrado]}>
@@ -265,12 +259,11 @@ const TorneosScreen = ({ navigation }) => {
           data={torneos}
           keyExtractor={(item) => item.id}
           renderItem={renderTorneo}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: 20 }]}
           showsVerticalScrollIndicator={false}
         />
       )}
 
-      {/* Modal de confirmación */}
       <Modal
         visible={showModal}
         transparent={true}
@@ -358,7 +351,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingVertical: 8,
-    paddingBottom: 20,
   },
   card: {
     backgroundColor: colors.white,

@@ -38,8 +38,11 @@ const PerfilScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 20 }}
+      >
         <View style={styles.profileHeader}>
           <View style={styles.avatarCircle}>
             <Text style={styles.avatarText}>
@@ -55,7 +58,6 @@ const PerfilScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Datos del jugador */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Datos del jugador</Text>
 
@@ -80,15 +82,12 @@ const PerfilScreen = () => {
           </View>
         </View>
 
-        {/* Configuración */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Configuración</Text>
 
           <TouchableOpacity style={styles.menuItem}>
             <Text style={styles.menuItemText}>Notificaciones</Text>
           </TouchableOpacity>
-          
-   
           
           <TouchableOpacity style={styles.menuItem}>
             <Text style={styles.menuItemText}>Términos y condiciones</Text>

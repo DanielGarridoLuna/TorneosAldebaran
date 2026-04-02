@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   registerButtonText: {
-    color: colors.secondary,
+    color: colors.white,
     fontSize: 14,
     textDecorationLine: 'underline',
   },

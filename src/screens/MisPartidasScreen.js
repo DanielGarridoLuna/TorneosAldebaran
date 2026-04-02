@@ -13,7 +13,6 @@ import { colors } from '../utils/colors';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 
-// Función auxiliar para normalizar IDs (igual que en la webapp)
 const normalizarId = (valor) => {
   if (valor === null || valor === undefined) return null;
   const limpio = String(valor).trim();
@@ -47,7 +46,6 @@ const MisPartidasScreen = ({ navigation }) => {
 
     setIsLoading(true);
     try {
-      // 1. Obtener torneos activos donde el usuario está inscrito
       const { data: torneosActivos } = await supabase
         .from('torneos')
         .select('id')
@@ -61,7 +59,6 @@ const MisPartidasScreen = ({ navigation }) => {
         return;
       }
 
-      // 2. Obtener inscripciones del usuario en torneos activos
       const { data: inscripciones, error: inscError } = await supabase
         .from('inscripciones')
         .select('torneo_id, evento_id')
@@ -84,7 +81,6 @@ const MisPartidasScreen = ({ navigation }) => {
         return;
       }
 
-      // 3. Obtener eventos no archivados
       const { data: eventos, error: eventosError } = await supabase
         .from('eventos')
         .select('*')
@@ -101,11 +97,9 @@ const MisPartidasScreen = ({ navigation }) => {
 
       const todasPartidas = [];
 
-      // 4. Para cada evento, buscar rondas activas (igual que en Pareos.js)
       for (const evento of eventos) {
         if (!esUuid(evento.id)) continue;
 
-        // Cargar rondas del evento (como en cargarRondas de Pareos.js)
         const { data: rondas, error: rondasError } = await supabase
           .from('rondas')
           .select('*')
@@ -119,12 +113,10 @@ const MisPartidasScreen = ({ navigation }) => {
 
         if (!rondas || rondas.length === 0) continue;
 
-        // Encontrar la ronda activa (status "activa") - igual que en Pareos.js
         const rondaActiva = rondas.find(r => r.status === 'activa');
 
         if (!rondaActiva) continue;
 
-        // Cargar matches de la ronda activa (como en cargarMatches de Pareos.js)
         const { data: matches, error: matchesError } = await supabase
           .from('matches')
           .select('*')
@@ -139,7 +131,6 @@ const MisPartidasScreen = ({ navigation }) => {
 
         if (!matches || matches.length === 0) continue;
 
-        // Filtrar solo los matches del usuario actual
         const misMatches = matches.filter(m =>
           normalizarId(m.jugador1_id) === user.player_id ||
           normalizarId(m.jugador2_id) === user.player_id
@@ -147,7 +138,6 @@ const MisPartidasScreen = ({ navigation }) => {
 
         if (misMatches.length === 0) continue;
 
-        // Obtener nombres de los jugadores (igual que en Pareos.js)
         const ids = [
           ...new Set(
             misMatches
@@ -169,14 +159,12 @@ const MisPartidasScreen = ({ navigation }) => {
           });
         }
 
-        // Obtener nombre del torneo
         const { data: torneo } = await supabase
           .from('torneos')
           .select('nombre')
           .eq('id', evento.torneo_id)
           .single();
 
-        // Formatear partidas
         const partidasFormateadas = misMatches.map(match => {
           const tieneResultado = match.confirmado === true;
           return {
@@ -281,7 +269,7 @@ const MisPartidasScreen = ({ navigation }) => {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.filterContainer}>
         <TouchableOpacity
           style={[
@@ -330,7 +318,7 @@ const MisPartidasScreen = ({ navigation }) => {
           data={partidasMostradas}
           keyExtractor={(item) => item.id}
           renderItem={renderPartida}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: 20 }]}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -382,7 +370,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingVertical: 8,
-    paddingBottom: 20,
   },
   card: {
     backgroundColor: colors.white,
